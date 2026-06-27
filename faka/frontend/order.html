@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>订单查询 - 自动发卡平台</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand">⚡ 极速<span>发卡</span></div>
+    <a href="/">商城</a>
+    <a href="/order" class="active">订单查询</a>
+    <a href="/admin">后台</a>
+  </nav>
+
+  <div class="wrap" style="max-width:620px">
+    <h1>订单查询</h1>
+    <p class="sub">输入订单号查询支付状态并重新获取卡密。</p>
+
+    <div style="display:flex;gap:10px">
+      <input id="q-no" placeholder="请输入订单号" />
+      <button onclick="queryOrder()" style="white-space:nowrap">查询</button>
+    </div>
+
+    <div id="result" style="margin-top:24px"></div>
+  </div>
+
+  <script src="/static/common.js"></script>
+  <script>
+    // 支持 ?no=xxx 直接查询
+    const params = new URLSearchParams(location.search);
+    if (params.get("no")) {
+      document.getElementById("q-no").value = params.get("no");
+    }
+
+    async function queryOrder() {
+      const no = document.getElementById("q-no").value.trim();
+      const box = document.getElementById("result");
+      if (!no) { toast("请输入订单号"); return; }
+      box.innerHTML = `<p class="muted">查询中…</p>`;
+      try {
+        const o = await api("/api/orders/" + encodeURIComponent(no));
+        const st = statusText[o.status] || o.status;
+        let html = `<div class="product">
+          <div class="row" style="display:flex;justify-content:space-between">
+            <h3>${o.product_name}</h3>
+            <span class="badge ${o.status}">${st}</span>
+          </div>
+          <p class="muted">订单号:${o.order_no}</p>
+          <p class="muted">数量:${o.quantity} &nbsp;|&nbsp; 金额:${money(o.amount)}</p>
+          <p class="muted">下单时间:${o.created_at}</p>`;
+        if (o.status === "paid") {
+          html += `<p style="color:var(--ok)">✓ 你的卡密:</p>
+            <div class="card-box" id="cards">${o.cards.map(esc).join("\n")}</div>
+            <button class="btn-sm" style="margin-top:10px" onclick="copy(document.getElementById('cards').textContent)">复制卡密</button>`;
+        } else if (o.status === "pending") {
+          html += `<button style="margin-top:10px" onclick="payNow('${o.order_no}')">去支付(模拟)</button>`;
+        }
+        html += `</div>`;
+        box.innerHTML = html;
+      } catch (e) {
+        box.innerHTML = `<p style="color:var(--err)">${e.message}</p>`;
+      }
+    }
+
+    async function payNow(no) {
+      try {
+        await api(`/api/orders/${no}/mock_pay`, { method: "POST" });
+        toast("支付成功");
+        queryOrder();
+      } catch (e) { toast(e.message); }
+    }
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, m =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    }
+
+    if (params.get("no")) queryOrder();
+  </script>
+</body>
+</html>
