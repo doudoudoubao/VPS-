@@ -4,7 +4,10 @@
 
 - 数据源：RapidAPI 上的第三方 Twitter 聚合接口（默认 `twitter154`，有免费额度）
 - 推送内容：指定地区（全球 / 美国 / 日本 …）的实时 Trending Topics 榜单
-- 特性：榜单去重（不重复刷屏）、讨论量过滤、HTML 富文本带链接
+- **地区轮播**：配多个地区时每次轮流推一个（也可一次性全推）
+- **定时静音**：指定时段不推送（如夜间 23:00–07:00）
+- **多目标推送**：chat_id 支持多个，可同时推到私聊 / 群 / **频道**（`@频道名`）
+- 其它：榜单去重（不重复刷屏）、讨论量过滤、HTML 富文本带链接
 - 运行方式：cron 单次 / 常驻轮询 / systemd / Docker 均可
 
 ---
@@ -22,8 +25,11 @@
 
 ### Telegram Bot
 1. 在 Telegram 找 [@BotFather](https://t.me/BotFather) → `/newbot` 拿到 **token**
-2. 给你的 bot 发一条消息（或把它拉进群/频道）
-3. 找 [@userinfobot](https://t.me/userinfobot) 获取你的 **chat_id**
+2. 获取推送目标 `chat_id`（可配多个，逗号分隔，同时推送）：
+   - **私聊/群**：给 bot 发条消息（群里把 bot 拉进去），用
+     [@userinfobot](https://t.me/userinfobot) 取 chat_id（群是负数）
+   - **频道**：把 bot 设为频道**管理员**，`chat_id` 直接填 `@频道用户名`
+     （或 `-100` 开头的数字 id）
 
 ---
 
@@ -86,7 +92,7 @@ docker run -d --name x-trend --restart unless-stopped \
 |------|------|
 | `--once` | 只执行一次（配合 cron） |
 | `--interval N` | 常驻轮询，每 N 秒一次 |
-| `--force` | 忽略去重，强制推送 |
+| `--force` | 忽略去重**和静音时段**，强制推送（测试用） |
 | `-v` | 调试日志 |
 
 ## 5. 主要配置项（config.env）
@@ -95,10 +101,18 @@ docker run -d --name x-trend --restart unless-stopped \
 |------|------|------|
 | `RAPIDAPI_KEY` | — | **必填**，RapidAPI 密钥 |
 | `TELEGRAM_BOT_TOKEN` | — | **必填**，Bot token |
-| `TELEGRAM_CHAT_ID` | — | **必填**，接收方 chat_id |
-| `TREND_WOEID` | `1` | 地区：1=全球 23424977=美国 23424856=日本 |
-| `TREND_REGION_LABEL` | `全球` | 推送标题里显示的地区名 |
+| `TELEGRAM_CHAT_ID` | — | **必填**，推送目标，多个用逗号分隔（私聊/群/`@频道名`） |
+| `TREND_WOEID` | `1` | 地区，多个用逗号分隔实现轮播。1=全球 23424977=美国 23424856=日本 |
+| `TREND_REGION_LABEL` | — | 地区显示名，与 `TREND_WOEID` 一一对应 |
+| `TREND_ROTATE` | `on` | `on`=每次轮流推一个地区；`off`=每次全推 |
+| `QUIET_HOURS` | — | 静音时段（本地时间），如 `23:00-07:00`，支持跨午夜；留空=全天推 |
 | `TREND_TOP_N` | `15` | 最多推送前 N 条 |
 | `TREND_MIN_VOLUME` | `0` | 只推讨论量≥该值的趋势 |
+
+### 地区轮播说明
+配 `TREND_WOEID=1,23424977,23424856`、`TREND_ROTATE=on` 后：
+- **cron / 轮询每次只推一个地区**，按顺序轮换（全球→美国→日本→全球…），
+  轮换指针记录在状态文件里。想每小时换一个地区，配合 `0 * * * *` 即可。
+- 设 `TREND_ROTATE=off` 则每次把所有地区一次性全推。
 
 > ⚠️ `config.env` 含密钥，已在 `.gitignore` 中，**不要提交到仓库**。
