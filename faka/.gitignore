@@ -1,8 +1,0 @@
-# 数据库与运行产物,切勿提交
-*.db
-*.db-wal
-*.db-shm
-__pycache__/
-*.py[cod]
-.venv/
-venv/
