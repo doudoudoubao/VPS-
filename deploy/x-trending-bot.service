@@ -1,0 +1,15 @@
+[Unit]
+Description=X Trending -> Telegram 推送
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/VPS-
+EnvironmentFile=/opt/VPS-/config.env
+ExecStart=/usr/bin/python3 /opt/VPS-/x_trending_bot.py --interval 3600
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
