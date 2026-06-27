@@ -61,8 +61,32 @@ def _parse_quiet_hours(raw: str):
         return None
 
 
+def _webapp_settings_path() -> str:
+    """Mini App 写入的设置覆盖文件路径。"""
+    return _env(
+        "WEBAPP_SETTINGS_FILE",
+        str(Path(__file__).resolve().parent / ".webapp_settings.json"),
+    )
+
+
+def load_webapp_settings() -> dict:
+    """读取 Mini App 写入的设置覆盖 (不存在/损坏则返回空 dict)。"""
+    try:
+        with open(_webapp_settings_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_webapp_settings(data: dict) -> None:
+    """持久化 Mini App 设置覆盖。"""
+    with open(_webapp_settings_path(), "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
 class Config:
-    """从环境变量读取配置。"""
+    """配置: 以环境变量为基线, 若存在 Mini App 设置文件则覆盖对应项。"""
 
     def __init__(self) -> None:
         # --- RapidAPI ---
@@ -71,25 +95,52 @@ class Config:
         self.trends_path = _env("RAPIDAPI_TRENDS_PATH", "/trends/")
         self.woeid_param = _env("RAPIDAPI_WOEID_PARAM", "woeid")
 
-        # --- 地区 (支持多个, 逗号分隔, 实现轮播) ---
+        # --- Telegram (chat_id 支持多个: 私聊/群/@频道名) ---
+        self.tg_token = _env("TELEGRAM_BOT_TOKEN")
+        self.tg_chat_ids = _split(_env("TELEGRAM_CHAT_ID"))
+
+        # --- 地区 / 推送行为 (env 为基线) ---
         woeids = _split(_env("TREND_WOEID", "1")) or ["1"]
         labels = _split(_env("TREND_REGION_LABEL", ""))
+        rotate_raw = _env("TREND_ROTATE", "on")
+        top_n = int(_env("TREND_TOP_N", "15") or "15")
+        min_volume = int(_env("TREND_MIN_VOLUME", "0") or "0")
+        quiet_raw = _env("QUIET_HOURS")
+
+        # --- Mini App 设置文件覆盖 (存在则生效, 不影响其它项) ---
+        ov = load_webapp_settings()
+        if ov:
+            ov_woeids = [str(w).strip() for w in (ov.get("woeids") or []) if str(w).strip()]
+            if ov_woeids:
+                woeids = ov_woeids
+                labels = [str(x).strip() for x in (ov.get("labels") or [])]
+            if "rotate" in ov:
+                rotate_raw = "on" if ov.get("rotate") else "off"
+            if ov.get("top_n") is not None:
+                try:
+                    top_n = int(ov["top_n"])
+                except (TypeError, ValueError):
+                    pass
+            if ov.get("min_volume") is not None:
+                try:
+                    min_volume = int(ov["min_volume"])
+                except (TypeError, ValueError):
+                    pass
+            if "quiet_hours" in ov:
+                quiet_raw = str(ov.get("quiet_hours") or "")
+
         # 地区列表: [(woeid, label), ...], label 缺省时用 "WOEID xxx"
         self.regions = [
             (w, labels[i] if i < len(labels) else f"WOEID {w}")
             for i, w in enumerate(woeids)
         ]
         # 轮播模式: on=每次轮流推一个地区; off=每次把所有地区都推一遍
-        self.rotate = _env("TREND_ROTATE", "on").lower() not in ("off", "0", "false")
+        self.rotate = rotate_raw.lower() not in ("off", "0", "false")
+        self.top_n = top_n
+        self.min_volume = min_volume
+        self.quiet_hours_raw = quiet_raw
+        self.quiet_hours = _parse_quiet_hours(quiet_raw)
 
-        # --- Telegram (chat_id 支持多个: 私聊/群/@频道名) ---
-        self.tg_token = _env("TELEGRAM_BOT_TOKEN")
-        self.tg_chat_ids = _split(_env("TELEGRAM_CHAT_ID"))
-
-        # --- 推送行为 ---
-        self.top_n = int(_env("TREND_TOP_N", "15") or "15")
-        self.min_volume = int(_env("TREND_MIN_VOLUME", "0") or "0")
-        self.quiet_hours = _parse_quiet_hours(_env("QUIET_HOURS"))
         self.state_file = _env(
             "STATE_FILE",
             str(Path(__file__).resolve().parent / ".trend_state.json"),
@@ -324,8 +375,7 @@ def run_once(cfg: Config, force: bool = False) -> bool:
     静音时段内 (且非 force) 直接跳过。
     """
     if not force and in_quiet_hours(cfg):
-        log.info("当前处于静音时段 %s, 跳过推送。",
-                 _env("QUIET_HOURS"))
+        log.info("当前处于静音时段 %s, 跳过推送。", cfg.quiet_hours_raw)
         return False
 
     state = load_state(cfg.state_file)
@@ -371,7 +421,7 @@ def main() -> None:
              ", ".join(l for _, l in cfg.regions),
              "开" if cfg.rotate else "关",
              len(cfg.tg_chat_ids),
-             _env("QUIET_HOURS") or "无")
+             cfg.quiet_hours_raw or "无")
 
     if args.interval and not args.once:
         log.info("进入常驻轮询模式, 间隔 %s 秒。", args.interval)

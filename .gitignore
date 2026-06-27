@@ -5,6 +5,7 @@ config.env
 
 # 运行状态
 .trend_state.json
+.webapp_settings.json
 
 # Python
 __pycache__/

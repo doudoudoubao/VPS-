@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY x_trending_bot.py webapp_server.py ./
+COPY webapp ./webapp
+
+ENV PYTHONUNBUFFERED=1
+# 容器内监听 0.0.0.0, 由外层 nginx/反代提供 HTTPS
+ENV WEBAPP_HOST=0.0.0.0
+ENV WEBAPP_PORT=8088
+EXPOSE 8088
+ENTRYPOINT ["python", "webapp_server.py"]

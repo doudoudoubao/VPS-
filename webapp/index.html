@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>X 实时热门趋势</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">🔥 X 实时热门趋势</div>
+    <div class="tabs">
+      <button class="tab active" data-tab="trends">趋势榜</button>
+      <button class="tab" data-tab="settings">设置</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 趋势榜 -->
+    <section id="tab-trends" class="tab-panel active">
+      <div class="region-bar">
+        <label for="regionSelect">地区</label>
+        <select id="regionSelect"></select>
+        <button id="refreshBtn" class="icon-btn" title="刷新">↻</button>
+      </div>
+      <div id="trendMeta" class="meta"></div>
+      <ol id="trendList" class="trend-list"></ol>
+      <div id="trendEmpty" class="empty hidden">暂无数据</div>
+      <button id="pushBtn" class="primary-btn" disabled>把本榜单立即推送到 Telegram</button>
+    </section>
+
+    <!-- 设置 -->
+    <section id="tab-settings" class="tab-panel">
+      <div class="card">
+        <h3>轮播地区</h3>
+        <p class="hint">cron / 常驻 bot 会按此列表推送; 多个地区时可轮流推。</p>
+        <ul id="regionEditor" class="region-editor"></ul>
+        <div class="add-region">
+          <select id="presetSelect"></select>
+          <button id="addRegionBtn" class="secondary-btn">+ 添加</button>
+        </div>
+        <label class="switch-row">
+          <span>多地区轮播 (每次只推一个)</span>
+          <input type="checkbox" id="rotateToggle">
+        </label>
+      </div>
+
+      <div class="card">
+        <h3>推送行为</h3>
+        <label class="field">
+          <span>最多推送条数 (Top N)</span>
+          <input type="number" id="topN" min="1" max="50">
+        </label>
+        <label class="field">
+          <span>最低讨论量 (0=不过滤)</span>
+          <input type="number" id="minVolume" min="0" step="1000">
+        </label>
+        <label class="field">
+          <span>静音时段 (HH:MM-HH:MM, 留空=全天)</span>
+          <input type="text" id="quietHours" placeholder="23:00-07:00">
+        </label>
+      </div>
+
+      <div class="card status-card">
+        <div class="status-row"><span>RapidAPI 数据源</span><span id="stRapid">—</span></div>
+        <div class="status-row"><span>Telegram 推送目标</span><span id="stTg">—</span></div>
+      </div>
+
+      <button id="saveBtn" class="primary-btn">保存设置</button>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
